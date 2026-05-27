@@ -2,7 +2,7 @@
   "name": "Bell 505 Weight & Balance",
   "short_name": "B505 W&B",
   "description": "Weight & Balance calculator for Bell 505 Jet Ranger X",
-  "start_url": "./wb505_v3.html",
+  "start_url": "./wb505_v3_138.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0a0f",
