@@ -717,20 +717,20 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
     <div style="font-size:11px;color:var(--muted)">Photo of a paper manifest, WhatsApp message or any text with passenger data. Claude will extract all relevant flight information automatically.</div>
 
     <!-- Input options -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      <label style="cursor:pointer;background:var(--accent);color:#fff;padding:9px;border-radius:6px;text-align:center;font-size:12px;font-weight:700">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+      <label style="cursor:pointer;background:var(--accent);color:#fff;padding:10px;border-radius:6px;text-align:center;font-size:12px;font-weight:700">
         📷 Camera
         <input type="file" accept="image/*" capture="environment" style="display:none" onchange="scanImage(this)">
       </label>
-      <label style="cursor:pointer;background:rgba(0,194,255,.15);border:1px solid var(--accent);color:var(--accent);padding:9px;border-radius:6px;text-align:center;font-size:12px;font-weight:700">
-        🖼 Gallery
+      <label style="cursor:pointer;background:rgba(0,194,255,.15);border:1px solid var(--accent);color:var(--accent);padding:10px;border-radius:6px;text-align:center;font-size:12px;font-weight:700">
+        🖼 Photo / Screenshot
         <input type="file" accept="image/*" style="display:none" onchange="scanImage(this)">
       </label>
-      <label style="cursor:pointer;background:rgba(139,92,246,.15);border:1px solid #7c3aed;color:#a78bfa;padding:9px;border-radius:6px;text-align:center;font-size:12px;font-weight:700">
-        📄 File
-        <input type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx" style="display:none" onchange="scanFile(this)">
-      </label>
     </div>
+    <label style="cursor:pointer;background:rgba(139,92,246,.15);border:1px solid #7c3aed;color:#a78bfa;padding:10px;border-radius:6px;text-align:center;font-size:12px;font-weight:700;display:block;width:100%;box-sizing:border-box">
+      📄 File (PDF · Word · Excel · TXT)
+      <input type="file" accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv" style="display:none" onchange="scanFile(this)">
+    </label>
 
     <img id="scan-preview" class="scan-preview" alt="Preview">
 
@@ -1593,7 +1593,7 @@ function scanFile(input){
   }
 
   // PDF → send as PDF document to Claude, or as image to Gemini
-  if(file.type==='application/pdf'||name.endsWith('.pdf')){
+  if(file.type==='application/pdf'||file.type==='application/x-pdf'||name.endsWith('.pdf')){
     n('scan-status').textContent='📄 Reading PDF...';
     var r=new FileReader();
     r.onload=function(e){
@@ -1618,7 +1618,10 @@ function scanFile(input){
   }
 
   // Word (.docx) — use mammoth to extract text
-  if(name.endsWith('.docx')||name.endsWith('.doc')){
+  var isWord=name.endsWith('.docx')||name.endsWith('.doc')||
+             file.type==='application/msword'||
+             file.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if(isWord){
     n('scan-status').textContent='📄 Reading Word document...';
     if(typeof mammoth==='undefined'){
       n('scan-status').textContent='❌ Mammoth library not loaded. Try PDF or image.';
@@ -3326,6 +3329,13 @@ function smartPrint(){
       }
       h2+='<div class="ft">Map: OpenStreetMap · '+new Date().toUTCString()+'</div></div>';
 
+      // Botón "Volver" visible en pantalla pero oculto al imprimir
+      h2+='<div class="no-print" style="position:fixed;top:12px;right:12px;z-index:9999">'+
+            '<button onclick="window.close();window.history.back();" '+
+            'style="background:#1e40af;color:#fff;border:none;padding:10px 18px;'+
+            'border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;'+
+            'box-shadow:0 2px 8px rgba(0,0,0,.3)">← Back to App</button></div>';
+      h2+='<style>@media print{.no-print{display:none!important}}</style>';
       h2+='<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>';
 
       var pw=window.open('','_blank','width=1000,height=700');
