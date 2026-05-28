@@ -2,23 +2,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bell 505 · Weight & Balance</title>
-
-<!-- PWA -->
-<link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="B505 W&B">
-<meta name="theme-color" content="#0a0a0f">
-<link rel="apple-touch-icon" href="icon-192.png">
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    });
-  }
-</script>
+<meta name="apple-mobile-web-app-title" content="B505 W&amp;B">
+<meta name="theme-color" content="#0a0e1a">
+<title>Bell 505 · Weight & Balance</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/chart.js" onerror="console.warn('Chart.js CDN failed')"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js" onerror="console.warn('Mammoth CDN failed')"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2" onerror="console.warn('Datalabels CDN failed')"></script>
@@ -3350,5 +3341,15 @@ function smartPrint(){
 
 <!-- METAR PAGE -->
 
+<script>
+// Register Service Worker for PWA/offline support
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js')
+      .then(function(reg){ console.log('SW registered:', reg.scope); })
+      .catch(function(e){ console.warn('SW registration failed:', e); });
+  });
+}
+</script>
 </body>
 </html>
