@@ -184,8 +184,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 .manifest-table tr.blue-row td{color:var(--blue)}
 .sign-area{background:#fff;border-radius:var(--radius);overflow:hidden;height:100px}
 #canvasSign{width:100%;height:100%;cursor:crosshair}
-.cloud-layer img{mix-blend-mode:screen!important}
-.cloud-layer{filter:brightness(1.6) contrast(1.5) saturate(0.8)}
+.cloud-layer{opacity:0.9}
 
 .scan-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .scan-btn:hover{opacity:.9}
@@ -639,6 +638,26 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
     <div id="avwx-key-status" style="font-family:var(--mono);font-size:10px;color:var(--muted)"></div>
   </div>
 
+  <!-- Windy API Key for advanced weather layers -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-top:8px;position:relative;overflow:hidden">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#00b4d8,#0077b6);opacity:.7"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:.1em">Windy API Key</div>
+      <span style="background:rgba(0,180,216,.2);color:#00b4d8;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;border:1px solid rgba(0,180,216,.3)">ADVANCED WX</span>
+    </div>
+    <div style="font-size:10px;color:var(--text2);margin-bottom:8px">
+      Clouds, wind, CAPE, visibility · Get free key at
+      <a href="https://api.windy.com" target="_blank" style="color:#00b4d8">api.windy.com</a>
+    </div>
+    <div style="display:flex;gap:8px">
+      <input id="windy-key-input" type="password" placeholder="Paste Windy API key..."
+        style="flex:1;font-family:var(--mono);font-size:11px"
+        oninput="saveWindyKey(this.value)">
+      <button onclick="clearWindyKey()" style="background:rgba(255,56,96,.15);border:1px solid rgba(255,56,96,.3);color:var(--red);font-size:11px">Clear</button>
+    </div>
+    <div id="windy-key-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px"></div>
+  </div>
+
   <!-- OWM Key for cloud overlay -->
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-top:8px;position:relative;overflow:hidden">
     <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.25"></div>
@@ -708,6 +727,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
       ✏️ Click to add waypoints · Double-click to finish · ESC to cancel
     </div>
     <div id="route-map" style="height:380px;width:100%"></div>
+  <div id="windy" style="height:380px;width:100%;display:none;position:relative"></div>
   </div>
 </div>
 <!-- ══ SCAN MODAL ══ -->
@@ -2072,6 +2092,7 @@ function _initApp(){
   loadSavedLogos();
   loadOwmKey();
   loadGeminiKey();
+  loadWindyKey();
   loadAnthropicKey();
   setScanBackend(load('scan-backend','anthropic'));
   // restore fuel unit toggle state
@@ -2117,9 +2138,9 @@ var baseLayer=null;
 function initMap(){
   if(metarMap) return;
   metarMap=L.map('route-map',{preferCanvas:true}).setView([12.5,104.5],6);
-  // CartoDB Dark Matter — fondo oscuro, ideal para ver nubes blancas encima
-  baseLayer=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-    attribution:'© OpenStreetMap © CartoDB',maxZoom:19,crossOrigin:true
+  // OpenStreetMap estándar — mapa a color con nombres de ciudades, carreteras y fronteras
+  baseLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:19,crossOrigin:true
   }).addTo(metarMap);
   cloudsLayer=null;
   cloudsOn=false;
@@ -2135,7 +2156,141 @@ function locateMe(){
   },function(){ n('metar-status').textContent='Location denied'; });
 }
 
+// ── WINDY INTEGRATION ────────────────────────────────────────────────────────
+var windyAPI=null, windyMap=null, windyActive=false;
+
+function saveWindyKey(val){
+  if(!val) return;
+  save('windy-key',val.trim());
+  var st=n('windy-key-status');
+  if(st){st.textContent='✓ Key saved — reload map to activate';st.style.color='var(--green)';}
+}
+function clearWindyKey(){
+  save('windy-key','');
+  var el=n('windy-key-input'); if(el) el.value='';
+  var st=n('windy-key-status');
+  if(st){st.textContent='Cleared';st.style.color='var(--muted)';}
+}
+function loadWindyKey(){
+  var k=load('windy-key','');
+  var el=n('windy-key-input'); if(el&&k) el.value=k;
+  if(k){var st=n('windy-key-status');if(st){st.textContent='✓ Key ready';st.style.color='var(--green)';}}
+}
+
+function initWindy(){
+  var key=load('windy-key','');
+  if(!key){ console.warn('No Windy key'); return; }
+  if(windyActive) return;
+
+  var btn=n('btn-clouds');
+  if(btn) btn.textContent='☁ Loading Windy...';
+
+  // Show windy div, hide leaflet map
+  var windyDiv=n('windy');
+  var leafletDiv=n('route-map');
+  if(!windyDiv||!leafletDiv) return;
+
+  leafletDiv.style.display='none';
+  windyDiv.style.display='block';
+
+  var options={
+    key: key,
+    verbose: false,
+    lat: 12.5,
+    lon: 104.5,
+    zoom: 6,
+    overlay: 'clouds',
+    level: 'surface',
+    timestamp: Math.round(Date.now()/1000)
+  };
+
+  // windyInit is provided by libBoot.js
+  if(typeof windyInit === 'undefined'){
+    // SDK not loaded yet — load it dynamically
+    var s=document.createElement('script');
+    s.src='https://api.windy.com/assets/map-forecast/libBoot.js';
+    s.onload=function(){ windyInit(options, onWindyReady); };
+    s.onerror=function(){
+      leafletDiv.style.display='block';
+      windyDiv.style.display='none';
+      if(btn) btn.textContent='☁ Windy failed';
+    };
+    document.head.appendChild(s);
+  } else {
+    try {
+      windyInit(options, onWindyReady);
+    } catch(e) {
+      console.error('windyInit error:', e);
+      fallbackToLeaflet();
+    }
+  }
+
+  // Timeout: if Windy doesn't load in 8 sec, fallback
+  setTimeout(function(){
+    if(!windyActive){
+      console.warn('Windy timeout — falling back to Leaflet');
+      fallbackToLeaflet();
+    }
+  }, 8000);
+}
+
+function fallbackToLeaflet(){
+  windyActive=false;
+  var windyDiv=n('windy'), leafletDiv=n('route-map');
+  if(windyDiv) windyDiv.style.display='none';
+  if(leafletDiv) leafletDiv.style.display='block';
+  if(!metarMap) initMap();
+  var btn=n('btn-clouds');
+  if(btn){btn.textContent='☁ Clouds OFF';btn.style.color='var(--text2)';}
+  var sel=n('windy-layer-select');
+  if(sel) sel.style.display='none';
+  // Show helpful message
+  var status=n('metar-status');
+  if(status) status.textContent='Windy requires HTTPS — use GitHub Pages or upload to a web server';
+}
+
+function onWindyReady(api){
+  windyAPI=api;
+  windyMap=api.map;
+  windyActive=true;
+  api.store.set('overlay','clouds');
+
+  var sel=n('windy-layer-select');
+  if(sel) sel.style.display='inline-block';
+
+  var btn=n('btn-clouds');
+  if(btn){btn.textContent='☁ Windy ON';btn.style.color='var(--accent)';}
+  cloudsOn=true;
+  console.log('Windy ready');
+}
+
+function changeWindyLayer(layer){
+  if(!windyAPI) return;
+  windyAPI.store.set('overlay', layer);
+}
+
 function toggleClouds(){
+  // If Windy key is configured, use Windy instead
+  var windyKey=load('windy-key','');
+  if(windyKey && !windyActive){
+    initWindy();
+    return;
+  }
+  if(windyActive){
+    // Toggle Windy overlay
+    cloudsOn=!cloudsOn;
+    var btn=n('btn-clouds');
+    if(!cloudsOn){
+      windyAPI&&windyAPI.store.set('overlay','none');
+      btn.textContent='☁ Clouds OFF'; btn.style.color='var(--text2)';
+    } else {
+      var sel=n('windy-layer-select');
+      windyAPI&&windyAPI.store.set('overlay',sel?sel.value:'clouds');
+      btn.textContent='☁ Windy ON'; btn.style.color='var(--accent)';
+    }
+    return;
+  }
+
   if(!metarMap){ initMap(); }
   cloudsOn=!cloudsOn;
   var btn=n('btn-clouds');
@@ -2148,46 +2303,57 @@ function toggleClouds(){
 
   btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
 
-  // Try sources in order until one loads tiles
-  var owmKey = load('owm-key','');
+  // RainViewer — fetch timestamp then load colored infrared satellite
+  btn.textContent='☁ Loading...';
 
-  if(owmKey){
-    // 1st choice: OpenWeatherMap with user key
-    cloudsLayer = L.tileLayer(
-      'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid='+owmKey,
-      {opacity:0.9, maxZoom:18, attribution:'© OpenWeatherMap',className:'cloud-layer'});
+  function loadRainViewer(ts){
+    // ts = unix timestamp, rounded to nearest 10 min
+    var path='/v2/satellite/'+ts;
+    // scheme 3 = colored infrared (like Windy): white=thin, cyan=medium, yellow/red=dense
+    if(cloudsLayer){ metarMap.removeLayer(cloudsLayer); }
+    cloudsLayer=L.tileLayer(
+      'https://tilecache.rainviewer.com'+path+'/256/{z}/{x}/{y}/3/1_1.png',
+      {opacity:0.85, maxZoom:18, attribution:'© RainViewer', className:'cloud-layer',
+       crossOrigin:true});
     cloudsLayer.addTo(metarMap);
-    return;
+    btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
   }
 
-  // 2nd choice: RainViewer — fetch current timestamp then load
-  btn.textContent='☁ Loading...';
-  fetch('https://api.rainviewer.com/public/weather-maps.json',{mode:'cors'})
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      var frames=(d.satellite&&d.satellite.infrared)||[];
-      if(!frames.length) throw 'no frames';
-      var path=frames[frames.length-1].path;
-      // scheme 0 = original infrared (white=clouds, transparent=clear sky)
-      // Over dark basemap this gives excellent contrast
-      cloudsLayer=L.tileLayer(
-        'https://tilecache.rainviewer.com'+path+'/256/{z}/{x}/{y}/2/1_1.png',
-        {opacity:1.0,maxZoom:18,attribution:'© RainViewer',className:'cloud-layer'});
-      cloudsLayer.addTo(metarMap);
-      btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
-    })
-    .catch(function(){
-      // 3rd choice: Windy satellite tiles (no key, no prefetch)
-      cloudsLayer=L.tileLayer(
-        'https://ims.windy.com/im/v3.0/forecast/ecmwf-hres/single-level/20240101T000000Z/clouds/surface/{z}/{x}/{y}/tile.png',
-        {opacity:1.0,maxZoom:12,attribution:'© Windy'});
-      // Final fallback: MSFT Planetary Computer — true color satellite
-      cloudsLayer=L.tileLayer(
-        'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg',
-        {opacity:1.0,maxZoom:9,attribution:'© NASA GIBS / MODIS Terra'});
-      cloudsLayer.addTo(metarMap);
-      btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
-    });
+  // Try multiple sources to get RainViewer timestamp
+  var rvUrl='https://api.rainviewer.com/public/weather-maps.json';
+  var proxies=[
+    'https://corsproxy.io/?'+encodeURIComponent(rvUrl),
+    'https://api.allorigins.win/raw?url='+encodeURIComponent(rvUrl),
+    rvUrl  // direct last (works on GitHub Pages)
+  ];
+
+  function tryRVProxy(i){
+    if(i>=proxies.length){
+      // All failed — use OWM if key available, else skip
+      var owmKey=load('owm-key','');
+      if(owmKey){
+        cloudsLayer=L.tileLayer(
+          'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid='+owmKey,
+          {opacity:0.85,maxZoom:18,attribution:'© OpenWeatherMap',className:'cloud-layer'});
+        cloudsLayer.addTo(metarMap);
+        btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
+      } else {
+        btn.textContent='☁ Failed'; btn.style.color='#ef4444'; cloudsOn=false;
+      }
+      return;
+    }
+    fetch(proxies[i])
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        // Handle allorigins wrapper
+        if(d.contents) d=JSON.parse(d.contents);
+        var frames=(d.satellite&&d.satellite.infrared)||[];
+        if(!frames.length) throw new Error('no frames');
+        loadRainViewer(frames[frames.length-1].time);
+      })
+      .catch(function(){ tryRVProxy(i+1); });
+  }
+  tryRVProxy(0);
 }
 
 function getICAOs(){
@@ -3360,11 +3526,17 @@ function smartPrint(){
 <script>
 // Register Service Worker for PWA/offline support
 if('serviceWorker' in navigator){
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('./sw.js')
-      .then(function(reg){ console.log('SW registered:', reg.scope); })
-      .catch(function(e){ console.warn('SW registration failed:', e); });
-  });
+  // Only register SW when running from a real server (not Claude preview or file://)
+  var loc=window.location.href;
+  var isReal=loc.indexOf('github.io')>=0||loc.indexOf('localhost')>=0||
+             (loc.indexOf('http')===0&&loc.indexOf('claudeusercontent')<0&&loc.indexOf('file://')<0);
+  if(isReal){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js')
+        .then(function(reg){ console.log('SW registered:', reg.scope); })
+        .catch(function(e){ console.warn('SW registration failed:', e); });
+    });
+  }
 }
 </script>
 </body>
