@@ -1,23 +1,18 @@
-const CACHE = 'b505-wb-v1';
+const CACHE = 'b505-wb-v3';
 
 const PRECACHE = [
-  './wb505_v3.html',
-  './manifest.json',
-  'https://cdn.jsdelivr.net/npm/chart.js',
-  'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js',
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css'
+  './index.html',
+  './manifest.json'
 ];
 
-// Install: cache all critical assets
+// Install: cache critical assets
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(cache => {
-      return Promise.allSettled(
+    caches.open(CACHE)
+      .then(cache => Promise.allSettled(
         PRECACHE.map(url => cache.add(url).catch(() => {}))
-      );
-    }).then(() => self.skipWaiting())
+      ))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -30,8 +25,20 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Fetch: cache-first strategy
+// Fetch: cache-first, network fallback
 self.addEventListener('fetch', e => {
+  // Skip non-GET and chrome-extension requests
+  if (e.request.method !== 'GET') return;
+  if (e.request.url.startsWith('chrome-extension://')) return;
+  // Skip API calls (Anthropic, Gemini, aviationweather, etc.)
+  const url = e.request.url;
+  if (url.includes('anthropic.com') ||
+      url.includes('googleapis.com') ||
+      url.includes('aviationweather.gov') ||
+      url.includes('rainviewer.com') ||
+      url.includes('corsproxy.io') ||
+      url.includes('allorigins.win')) return;
+
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
