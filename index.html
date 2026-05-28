@@ -2526,14 +2526,20 @@ function tryFetch(icao,apiKey,workerUrl,onOk,onErr){
     });
   }});
 
-  function next(i){
-    if(i>=sources.length){onErr('No METAR data available for '+icao);return;}
-    sources[i].go().then(onOk).catch(function(e){
-      console.warn('['+sources[i].name+'] '+icao+': '+e.message);
-      next(i+1);
-    });
-  }
-  next(0);
+  // Launch ALL sources in parallel — first success wins
+  var won=false, errs=0;
+  if(!sources.length){ onErr('No sources configured'); return; }
+  sources.forEach(function(src){
+    src.go()
+      .then(function(v){
+        if(!won){ won=true; onOk(v); }
+      })
+      .catch(function(e){
+        console.warn('['+src.name+'] '+icao+': '+e.message);
+        errs++;
+        if(errs===sources.length && !won) onErr('No METAR data available for '+icao);
+      });
+  });
 }
 
 // Parse raw METAR string into normalized object
