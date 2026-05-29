@@ -728,7 +728,11 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
     </div>
     <div id="route-map" style="height:380px;width:100%"></div>
   <div id="windy-container" style="height:380px;width:100%;display:none;position:relative;border-radius:4px;overflow:hidden">
-    <iframe id="windy-iframe" style="width:100%;height:100%;border:none" allowfullscreen></iframe>
+    <iframe id="windy-iframe" style="width:100%;height:100%;border:none;position:absolute;top:0;left:0" allowfullscreen></iframe>
+    <!-- Canvas overlay for drawing routes on top of Windy -->
+    <canvas id="windy-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10"></canvas>
+    <!-- Transparent click layer for drawing -->
+    <div id="windy-draw-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;display:none"></div>
   </div>
   </div>
 </div>
@@ -2241,6 +2245,47 @@ function onWindyReady(api){
   console.log('Windy ready');
 }
 
+// Drawing on top of Windy iframe via canvas overlay
+function initWindyDrawing(drawLayer, canvas){
+  if(drawLayer._windyDrawInit) return;
+  drawLayer._windyDrawInit=true;
+
+  var rect, drawing=false, lastX, lastY;
+  var ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth;
+  canvas.height=canvas.offsetHeight;
+  ctx.strokeStyle='#00e5a0'; ctx.lineWidth=3; ctx.lineCap='round';
+
+  function getPos(e){
+    var r=drawLayer.getBoundingClientRect();
+    var s=e.touches?e.touches[0]:e;
+    return {x:s.clientX-r.left, y:s.clientY-r.top};
+  }
+
+  drawLayer.addEventListener('mousedown',function(e){
+    drawing=true; var p=getPos(e); lastX=p.x; lastY=p.y;
+    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+  });
+  drawLayer.addEventListener('mouseup',function(){drawing=false;});
+  drawLayer.addEventListener('mouseleave',function(){drawing=false;});
+  drawLayer.addEventListener('mousemove',function(e){
+    if(!drawing) return;
+    var p=getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(p.x,p.y); ctx.stroke();
+    lastX=p.x; lastY=p.y;
+  });
+  drawLayer.addEventListener('touchstart',function(e){
+    e.preventDefault(); drawing=true; var p=getPos(e); lastX=p.x; lastY=p.y;
+  },{passive:false});
+  drawLayer.addEventListener('touchend',function(){drawing=false;});
+  drawLayer.addEventListener('touchmove',function(e){
+    if(!drawing) return; e.preventDefault();
+    var p=getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(p.x,p.y); ctx.stroke();
+    lastX=p.x; lastY=p.y;
+  },{passive:false});
+}
+
 function changeWindyLayer(layer){
   if(!windyActive) return;
   var iframe=n('windy-iframe');
@@ -3105,23 +3150,42 @@ function clearRoute(){
 function captureMap(){
   var statusEl=n('metar-status');
   statusEl.textContent='Capturing...';
+
+  if(windyActive){
+    var container=n('windy-container');
+    var W=container?container.offsetWidth:600;
+    var H=container?container.offsetHeight:380;
+    var cvs=document.createElement('canvas');
+    cvs.width=W; cvs.height=H;
+    var ctx=cvs.getContext('2d');
+    ctx.fillStyle='#1a2535'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='rgba(0,180,216,0.15)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#00b4d8'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('WINDY — Live Weather Map',W/2,H/2-20);
+    ctx.fillStyle='#7dd3fc'; ctx.font='12px sans-serif';
+    ctx.fillText('juanpmolinab.github.io/bell505-WB',W/2,H/2+10);
+    // Copy windy canvas overlay (drawn routes)
+    var windyCvs=n('windy-canvas');
+    if(windyCvs) try{ctx.drawImage(windyCvs,0,0);}catch(e){}
+    capturedMapImg=cvs.toDataURL('image/png');
+    statusEl.textContent='✓ Map captured (Windy live map)';
+    return;
+  }
+
   var allPoints=[];
   drawnPoints.forEach(function(pt){allPoints.push(L.latLng(pt[0],pt[1]));});
   mapMarkers.forEach(function(mk){allPoints.push(mk.getLatLng());});
   if(mapPolyline) mapPolyline.getLatLngs().forEach(function(ll){allPoints.push(ll);});
   if(allPoints.length>0) metarMap.fitBounds(L.latLngBounds(allPoints).pad(0.15));
-  // Temporarily hide cloud layer before capture (CORS blocks external tiles)
   var cloudsWereOn=cloudsOn;
-  if(cloudsOn && cloudsLayer){ metarMap.removeLayer(cloudsLayer); }
-  // Wait for tiles to fully load, then capture
-  // Force map redraw without clouds, then capture
+  if(cloudsOn&&cloudsLayer){ metarMap.removeLayer(cloudsLayer); }
   metarMap.invalidateSize();
   setTimeout(function(){
     doCapture(statusEl);
-    // Restore cloud layer after capture
-    if(cloudsWereOn && cloudsLayer){ cloudsLayer.addTo(metarMap); }
-  }, 1200);
+    if(cloudsWereOn&&cloudsLayer){ cloudsLayer.addTo(metarMap); }
+  },1200);
 }
+
 function doCapture(statusEl){
   var mapEl=n('route-map'),size=metarMap.getSize();
   var W=size.x||600,H=size.y||380;
@@ -3233,8 +3297,14 @@ showPage=function(id,btn){
   _origShowPage(id,btn);
   if(id==='metar'){
     setTimeout(function(){
-      initMap();
-      if(metarMap) metarMap.invalidateSize();
+      // Auto-start Windy if key is configured, else normal Leaflet map
+      var windyKey=load('windy-key','');
+      if(windyKey && !windyActive){
+        initWindy();
+      } else {
+        initMap();
+        if(metarMap) metarMap.invalidateSize();
+      }
       // Auto-fill from flight plan only if fields are truly empty
       var dep=n('i-from'),arr=n('i-to');
       var depEl=n('icao-dep'), arrEl=n('icao-arr');
