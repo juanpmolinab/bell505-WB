@@ -720,6 +720,13 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
         <button id="btn-draw" onclick="toggleDrawMode()" style="background:rgba(0,194,255,0.1);border:1px solid var(--border);color:var(--text2);padding:4px 10px;font-size:10px">✏️ Draw Route</button>
         <button onclick="clearRoute()" style="background:rgba(255,56,96,0.1);border:1px solid rgba(255,56,96,0.3);color:var(--red);padding:4px 10px;font-size:10px">✕ Clear</button>
         <button onclick="toggleClouds()" id="btn-clouds" style="background:rgba(0,194,255,0.1);border:1px solid var(--border);color:var(--text2);padding:4px 10px;font-size:10px">☁ Clouds OFF</button>
+        <span id="owm-layers" style="display:none;gap:3px;align-items:center">
+          <button onclick="setOWMLayer('clouds_new')"        class="owm-btn" title="Clouds"      style="padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid var(--accent);background:rgba(0,194,255,.2);color:var(--accent)">☁</button>
+          <button onclick="setOWMLayer('wind_new')"          class="owm-btn" title="Wind"        style="padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted)">💨</button>
+          <button onclick="setOWMLayer('precipitation_new')" class="owm-btn" title="Rain"        style="padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted)">🌧</button>
+          <button onclick="setOWMLayer('pressure_new')"      class="owm-btn" title="Pressure"    style="padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted)">📊</button>
+          <button onclick="setOWMLayer('temp_new')"          class="owm-btn" title="Temperature" style="padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted)">🌡</button>
+        </span>
         <button onclick="captureMap()" style="background:rgba(0,194,255,0.1);border:1px solid var(--border);color:var(--text2);padding:4px 10px;font-size:10px">📸 Capture</button>
       </div>
     </div>
@@ -731,8 +738,8 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
     <iframe id="windy-iframe" style="width:100%;height:100%;border:none;position:absolute;top:0;left:0" allowfullscreen></iframe>
     <!-- Canvas overlay for drawing routes on top of Windy -->
     <canvas id="windy-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10"></canvas>
-    <!-- Transparent click layer for drawing -->
-    <div id="windy-draw-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;display:none"></div>
+    <!-- Transparent click layer for drawing - covers iframe when active -->
+    <div id="windy-draw-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:100;display:none;cursor:crosshair;background:transparent"></div>
   </div>
   </div>
 </div>
@@ -2286,36 +2293,36 @@ function initWindyDrawing(drawLayer, canvas){
   },{passive:false});
 }
 
-function changeWindyLayer(layer){
-  if(!windyActive) return;
-  var iframe=n('windy-iframe');
-  if(!iframe||!iframe.src) return;
-  // Update overlay param in URL
-  iframe.src=iframe.src.replace(/overlay=[^&]+/,'overlay='+layer);
+function setOWMLayer(layerName){
+  var owmKey=load('owm-key','');
+  if(!owmKey) return;
+  save('owm-active-layer', layerName);
+
+  // Update button styles
+  document.querySelectorAll('.owm-btn').forEach(function(b){
+    b.style.background='transparent';
+    b.style.borderColor='var(--border)';
+    b.style.color='var(--muted)';
+  });
+  var activeBtn=document.querySelector('[onclick*="'+layerName+'"]');
+  if(activeBtn){
+    activeBtn.style.background='rgba(0,194,255,.2)';
+    activeBtn.style.borderColor='var(--accent)';
+    activeBtn.style.color='var(--accent)';
+  }
+
+  // Replace layer on map
+  if(metarMap){
+    if(cloudsLayer) metarMap.removeLayer(cloudsLayer);
+    cloudsLayer=L.tileLayer(
+      'https://tile.openweathermap.org/map/'+layerName+'/{z}/{x}/{y}.png?appid='+owmKey,
+      {opacity:0.85,maxZoom:18,attribution:'© OpenWeatherMap',className:'cloud-layer'});
+    cloudsLayer.addTo(metarMap);
+    cloudsOn=true;
+  }
 }
 
 function toggleClouds(){
-  // If Windy key is configured, use Windy instead
-  var windyKey=load('windy-key','');
-  if(windyKey && !windyActive){
-    initWindy();
-    return;
-  }
-  if(windyActive){
-    // Toggle Windy overlay
-    cloudsOn=!cloudsOn;
-    var btn=n('btn-clouds');
-    if(!cloudsOn){
-      windyAPI&&windyAPI.store.set('overlay','none');
-      btn.textContent='☁ Clouds OFF'; btn.style.color='var(--text2)';
-    } else {
-      var sel=n('windy-layer-select');
-      windyAPI&&windyAPI.store.set('overlay',sel?sel.value:'clouds');
-      btn.textContent='☁ Windy ON'; btn.style.color='var(--accent)';
-    }
-    return;
-  }
-
   if(!metarMap){ initMap(); }
   cloudsOn=!cloudsOn;
   var btn=n('btn-clouds');
@@ -2323,6 +2330,7 @@ function toggleClouds(){
   if(!cloudsOn){
     if(cloudsLayer){ metarMap.removeLayer(cloudsLayer); cloudsLayer=null; }
     btn.textContent='☁ Clouds OFF'; btn.style.color='var(--text2)';
+    var owmDiv=n('owm-layers'); if(owmDiv) owmDiv.style.display='none';
     return;
   }
 
@@ -3151,26 +3159,7 @@ function captureMap(){
   var statusEl=n('metar-status');
   statusEl.textContent='Capturing...';
 
-  if(windyActive){
-    var container=n('windy-container');
-    var W=container?container.offsetWidth:600;
-    var H=container?container.offsetHeight:380;
-    var cvs=document.createElement('canvas');
-    cvs.width=W; cvs.height=H;
-    var ctx=cvs.getContext('2d');
-    ctx.fillStyle='#1a2535'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='rgba(0,180,216,0.15)'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#00b4d8'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('WINDY — Live Weather Map',W/2,H/2-20);
-    ctx.fillStyle='#7dd3fc'; ctx.font='12px sans-serif';
-    ctx.fillText('juanpmolinab.github.io/bell505-WB',W/2,H/2+10);
-    // Copy windy canvas overlay (drawn routes)
-    var windyCvs=n('windy-canvas');
-    if(windyCvs) try{ctx.drawImage(windyCvs,0,0);}catch(e){}
-    capturedMapImg=cvs.toDataURL('image/png');
-    statusEl.textContent='✓ Map captured (Windy live map)';
-    return;
-  }
+
 
   var allPoints=[];
   drawnPoints.forEach(function(pt){allPoints.push(L.latLng(pt[0],pt[1]));});
@@ -3297,14 +3286,11 @@ showPage=function(id,btn){
   _origShowPage(id,btn);
   if(id==='metar'){
     setTimeout(function(){
-      // Auto-start Windy if key is configured, else normal Leaflet map
-      var windyKey=load('windy-key','');
-      if(windyKey && !windyActive){
-        initWindy();
-      } else {
-        initMap();
-        if(metarMap) metarMap.invalidateSize();
-      }
+      initMap();
+      if(metarMap) metarMap.invalidateSize();
+      // Auto-load weather layers if OWM key present
+      var owmKey=load('owm-key','');
+      if(owmKey && !cloudsOn) toggleClouds();
       // Auto-fill from flight plan only if fields are truly empty
       var dep=n('i-from'),arr=n('i-to');
       var depEl=n('icao-dep'), arrEl=n('icao-arr');
