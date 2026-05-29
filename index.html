@@ -65,7 +65,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 .lime{color:#86efac} .out-limit{color:#ef4444!important}
 
 /* CALC GRID */
-.calc-grid{display:grid;grid-template-columns:1fr 220px 1fr;gap:8px;margin-bottom:10px}
+.calc-grid{display:grid;grid-template-columns:1.2fr 132px 1.2fr;gap:8px;margin-bottom:10px}
 
 /* DESKTOP 2-COLUMN LAYOUT: [pax+heli+fuel] | [chart+results] */
 @media(min-width:900px){
@@ -83,18 +83,18 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
   .calc-right{ display:flex; flex-direction:column; gap:8px; height:100% }
 
   /* pax */
-  .calc-grid{ gap:8px; margin-bottom:0 }
-  .pax-panel{ padding:9px 12px; gap:7px }
-  .pax-row{ gap:4px; padding-bottom:7px }
+  .calc-grid{ gap:8px; margin-bottom:0; align-items:stretch }
+  .pax-panel{ padding:9px 12px; gap:0; display:flex; flex-direction:column; justify-content:space-between; height:100% }
+  .pax-row{ gap:4px; padding-bottom:0; flex:1; display:flex; flex-direction:column; justify-content:center }
   .pax-row input[type="text"]{ font-size:13px; padding:4px 7px }
   .seat-tag{ font-size:10px; padding:2px 6px }
   .weight-badge{ font-size:13px }
-  .heli-wrap{ width:173px; height:210px }
-  .heli-center{ padding:8px }
+  .heli-wrap{ width:100%; max-width:120px; height:auto; flex:1 }
+  .heli-center{ padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100% }
 
   /* fuel */
   .fuel-panel{ padding:9px 12px; gap:8px; margin-bottom:0;
-    grid-template-columns:1fr 1fr 40px 1fr }
+    grid-template-columns:1fr 1fr 40px 1fr; flex:1; align-content:center }
   .fuel-section{ gap:4px }
   .fuel-section label{ font-size:10px }
   .fuel-section div{ font-size:12px; line-height:1.5 }
@@ -1540,7 +1540,11 @@ function restoreState() {
   ['sf','srl','src','ps','srr'].forEach(k=>{
     const v=load(`n-${k}`,''); const el=n(`n-${k}`); if(el) el.value=v;
   });
-  const pilot=load('pilot',''); const pe=n('i-pilot'); if(pe) pe.value=pilot;
+  const pilot=load('pilot','');
+  const pe=n('i-pilot'); if(pe) pe.value=pilot;
+  // Sync pilot name to seat — guard against 'undefined' string
+  if(pilot && pilot!=='undefined') syncPilotName(pilot);
+  else if(pilot==='undefined'){ save('pilot',''); if(pe) pe.value=''; }
   ['from','to','nm','qnh'].forEach(k=>{ const el=n(`i-${k}`); if(el) el.value=load(k,''); });
   const altEl=n('i-alt'); if(altEl) altEl.value=load('alt','');
   const tempEl=n('i-temp'); if(tempEl) tempEl.value=load('temp','');
