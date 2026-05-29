@@ -727,7 +727,9 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
       ✏️ Click to add waypoints · Double-click to finish · ESC to cancel
     </div>
     <div id="route-map" style="height:380px;width:100%"></div>
-  <div id="windy" style="height:380px;width:100%;display:none;position:relative"></div>
+  <div id="windy-container" style="height:380px;width:100%;display:none;position:relative;border-radius:4px;overflow:hidden">
+    <iframe id="windy-iframe" style="width:100%;height:100%;border:none" allowfullscreen></iframe>
+  </div>
   </div>
 </div>
 <!-- ══ SCAN MODAL ══ -->
@@ -2188,34 +2190,40 @@ function initWindy(){
   var btn=n('btn-clouds');
   if(btn) btn.textContent='☁ Loading Windy...';
 
-  var windyDiv=n('windy');
+  var container=n('windy-container');
   var leafletDiv=n('route-map');
-  if(!windyDiv||!leafletDiv) return;
+  var iframe=n('windy-iframe');
+  if(!container||!leafletDiv||!iframe) return;
+
+  // Build Windy embed URL
+  var lat=12.5, lon=104.5, zoom=6;
+  if(metarMap){
+    var c=metarMap.getCenter();
+    lat=c.lat.toFixed(4);
+    lon=c.lng.toFixed(4);
+    zoom=metarMap.getZoom();
+  }
+
+  var windyUrl='https://embed.windy.com/embed2.html'+
+    '?lat='+lat+'&lon='+lon+'&detailLat='+lat+'&detailLon='+lon+
+    '&width=650&height=380&zoom='+zoom+
+    '&level=surface&overlay=clouds&product=ecmwf'+
+    '&menu=&message=true&marker=&calendar=now&pressure=true'+
+    '&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0C'+
+    '&radarRange=-1';
+
+  iframe.src=windyUrl;
 
   leafletDiv.style.display='none';
-  windyDiv.style.display='block';
+  container.style.display='block';
+  windyActive=true;
 
-  var options={key:key,verbose:false,lat:12.5,lon:104.5,zoom:6,overlay:'clouds',level:'surface'};
+  // Show layer selector
+  var sel=n('windy-layer-select');
+  if(sel) sel.style.display='inline-block';
 
-  function doInit(){
-    try{ windyInit(options, onWindyReady); }
-    catch(e){ console.error('windyInit:',e); fallbackToLeaflet(); }
-  }
-
-  if(typeof windyInit!=='undefined'){
-    doInit();
-  } else {
-    var existing=document.getElementById('windy-sdk-script');
-    if(existing) existing.remove();
-    var s=document.createElement('script');
-    s.id='windy-sdk-script';
-    s.src='https://api.windy.com/assets/map-forecast/libBoot.js';
-    s.onload=function(){ setTimeout(doInit,300); };
-    s.onerror=function(){ fallbackToLeaflet(); };
-    document.head.appendChild(s);
-  }
-
-  setTimeout(function(){ if(!windyActive) fallbackToLeaflet(); },12000);
+  if(btn){btn.textContent='☁ Windy ON';btn.style.color='var(--accent)';}
+  cloudsOn=true;
 }
 
 function onWindyReady(api){
@@ -2234,8 +2242,11 @@ function onWindyReady(api){
 }
 
 function changeWindyLayer(layer){
-  if(!windyAPI) return;
-  windyAPI.store.set('overlay', layer);
+  if(!windyActive) return;
+  var iframe=n('windy-iframe');
+  if(!iframe||!iframe.src) return;
+  // Update overlay param in URL
+  iframe.src=iframe.src.replace(/overlay=[^&]+/,'overlay='+layer);
 }
 
 function toggleClouds(){
