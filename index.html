@@ -42,7 +42,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 .page.active{display:block}
 
 /* TOP BAR */
-.top-bar{display:flex;align-items:center;gap:8px;background:var(--surface);border-bottom:1px solid var(--border);padding:6px 12px;flex-wrap:wrap}
+.top-bar{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--surface);border-bottom:1px solid var(--border);padding:6px 12px;flex-wrap:nowrap;min-height:100px;box-sizing:border-box}
 .top-bar h1{font-size:15px;font-weight:700;color:var(--accent);flex:none;display:flex;align-items:center;gap:8px}
 .top-bar h1 img{height:36px;width:36px;object-fit:contain;border-radius:6px}
 .top-bar .logos{display:flex;align-items:center;gap:8px;margin-left:auto}
@@ -73,7 +73,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
   #page-calc{ padding:10px 14px }
 
   /* info grid */
-  .info-grid{ padding:8px 10px; gap:7px; margin-bottom:8px }
+  .info-grid{ padding:8px 10px; gap:0; margin-bottom:8px; height:100px; box-sizing:border-box; align-content:center; justify-content:space-between; align-items:center }
   .info-grid input,.info-grid select{ padding:5px 7px; font-size:12px }
   .info-grid label{ font-size:10px }
 
@@ -83,7 +83,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
   .calc-right{ display:flex; flex-direction:column; gap:8px }
 
   /* pax */
-  .calc-grid{ gap:8px; margin-bottom:0; align-items:stretch; height:360px }
+  .calc-grid{ gap:8px; margin-bottom:0; align-items:stretch; height:400px }
   .pax-panel,.heli-center{ height:100% }
   .pax-panel{ padding:9px 12px; gap:0; display:flex; flex-direction:column; justify-content:space-between; height:100% }
   .pax-row{ gap:4px; padding-bottom:0; flex:1; display:flex; flex-direction:column; justify-content:center }
@@ -95,7 +95,9 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 
   /* fuel */
   .fuel-panel{ padding:9px 12px; gap:8px; margin-bottom:0;
-    grid-template-columns:1fr 1fr 40px 1fr; height:128px; align-content:center; box-sizing:border-box }
+    grid-template-columns:1fr 1fr 40px 1fr; height:128px;
+    align-content:center; justify-content:center; align-items:center;
+    box-sizing:border-box }
   .fuel-section{ gap:4px }
   .fuel-section label{ font-size:10px }
   .fuel-section div{ font-size:12px; line-height:1.5 }
@@ -104,13 +106,15 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 
   /* chart derecha */
   .chart-panel-desktop{ background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius); padding:10px; box-sizing:border-box; height:360px }
-  .chart-wrap-desktop{ position:relative; height:340px }
+    border-radius:var(--radius); padding:10px; box-sizing:border-box; height:400px }
+  .chart-wrap-desktop{ position:relative; height:380px }
 
   /* tablas resultados */
   .results-table{ background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius); padding:8px 10px; height:128px; display:flex; flex-direction:column; justify-content:center; box-sizing:border-box }
-  .results-table table{ width:100%; border-collapse:collapse; font-size:12px }
+    border-radius:var(--radius); padding:8px 10px; height:128px;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    box-sizing:border-box }
+  .results-table table{ width:100%; border-collapse:collapse; font-size:12px; text-align:center }
   .results-table th{ color:var(--muted); font-weight:600; text-align:center;
     padding:5px 6px; border-bottom:1px solid var(--border) }
   .results-table td{ text-align:center; padding:5px 6px;
