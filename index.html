@@ -78,9 +78,9 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
   .info-grid label{ font-size:10px }
 
   /* layout 2 columnas */
-  .calc-desktop{ display:grid; grid-template-columns:1fr 380px; gap:12px; align-items:start }
+  .calc-desktop{ display:grid; grid-template-columns:1fr 460px; gap:12px; align-items:stretch }
   .calc-left{ display:flex; flex-direction:column; gap:8px }
-  .calc-right{ display:flex; flex-direction:column; gap:8px }
+  .calc-right{ display:flex; flex-direction:column; gap:8px; height:100% }
 
   /* pax */
   .calc-grid{ gap:8px; margin-bottom:0 }
@@ -103,12 +103,12 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 
   /* chart derecha */
   .chart-panel-desktop{ background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius); padding:10px }
-  .chart-wrap-desktop{ position:relative; height:310px }
+    border-radius:var(--radius); padding:10px; flex:1; display:flex; flex-direction:column }
+  .chart-wrap-desktop{ position:relative; height:360px }
 
   /* tablas resultados */
   .results-table{ background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius); padding:8px 10px }
+    border-radius:var(--radius); padding:8px 10px; flex:1 }
   .results-table table{ width:100%; border-collapse:collapse; font-size:12px }
   .results-table th{ color:var(--muted); font-weight:600; text-align:center;
     padding:5px 6px; border-bottom:1px solid var(--border) }
