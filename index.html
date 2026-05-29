@@ -2337,48 +2337,50 @@ function toggleClouds(){
   btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
 
   // RainViewer — fetch timestamp then load colored infrared satellite
+  // OWM key → use OWM with layer selector (recommended: capturable for print)
+  var owmKey=load('owm-key','');
+  if(owmKey){
+    var activeLayer=load('owm-active-layer','clouds_new');
+    if(cloudsLayer){ metarMap.removeLayer(cloudsLayer); }
+    cloudsLayer=L.tileLayer(
+      'https://tile.openweathermap.org/map/'+activeLayer+'/{z}/{x}/{y}.png?appid='+owmKey,
+      {opacity:0.85,maxZoom:18,attribution:'© OpenWeatherMap',className:'cloud-layer'});
+    cloudsLayer.addTo(metarMap);
+    btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
+    // Show layer selector buttons
+    var owmDiv=n('owm-layers');
+    if(owmDiv){ owmDiv.style.display='inline-flex'; }
+    return;
+  }
+
+  // No OWM key → use RainViewer (satellite infrared, colored)
   btn.textContent='☁ Loading...';
 
   function loadRainViewer(ts){
-    // ts = unix timestamp, rounded to nearest 10 min
     var path='/v2/satellite/'+ts;
-    // scheme 3 = colored infrared (like Windy): white=thin, cyan=medium, yellow/red=dense
     if(cloudsLayer){ metarMap.removeLayer(cloudsLayer); }
     cloudsLayer=L.tileLayer(
       'https://tilecache.rainviewer.com'+path+'/256/{z}/{x}/{y}/3/1_1.png',
-      {opacity:0.85, maxZoom:18, attribution:'© RainViewer', className:'cloud-layer',
-       crossOrigin:true});
+      {opacity:0.85,maxZoom:18,attribution:'© RainViewer',className:'cloud-layer',crossOrigin:true});
     cloudsLayer.addTo(metarMap);
     btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
   }
 
-  // Try multiple sources to get RainViewer timestamp
   var rvUrl='https://api.rainviewer.com/public/weather-maps.json';
   var proxies=[
     'https://corsproxy.io/?'+encodeURIComponent(rvUrl),
     'https://api.allorigins.win/raw?url='+encodeURIComponent(rvUrl),
-    rvUrl  // direct last (works on GitHub Pages)
+    rvUrl
   ];
 
   function tryRVProxy(i){
     if(i>=proxies.length){
-      // All failed — use OWM if key available, else skip
-      var owmKey=load('owm-key','');
-      if(owmKey){
-        cloudsLayer=L.tileLayer(
-          'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid='+owmKey,
-          {opacity:0.85,maxZoom:18,attribution:'© OpenWeatherMap',className:'cloud-layer'});
-        cloudsLayer.addTo(metarMap);
-        btn.textContent='☁ Clouds ON'; btn.style.color='var(--accent)';
-      } else {
-        btn.textContent='☁ Failed'; btn.style.color='#ef4444'; cloudsOn=false;
-      }
+      btn.textContent='☁ Failed'; btn.style.color='#ef4444'; cloudsOn=false;
       return;
     }
     fetch(proxies[i])
-      .then(function(r){ return r.json(); })
+      .then(function(r){return r.json();})
       .then(function(d){
-        // Handle allorigins wrapper
         if(d.contents) d=JSON.parse(d.contents);
         var frames=(d.satellite&&d.satellite.infrared)||[];
         if(!frames.length) throw new Error('no frames');
