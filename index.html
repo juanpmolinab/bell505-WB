@@ -2179,13 +2179,15 @@ function loadWindyKey(){
 
 function initWindy(){
   var key=load('windy-key','');
-  if(!key){ console.warn('No Windy key'); return; }
+  if(!key){
+    n('metar-status').textContent='No Windy key — add it in Settings';
+    return;
+  }
   if(windyActive) return;
 
   var btn=n('btn-clouds');
   if(btn) btn.textContent='☁ Loading Windy...';
 
-  // Show windy div, hide leaflet map
   var windyDiv=n('windy');
   var leafletDiv=n('route-map');
   if(!windyDiv||!leafletDiv) return;
@@ -2193,60 +2195,27 @@ function initWindy(){
   leafletDiv.style.display='none';
   windyDiv.style.display='block';
 
-  var options={
-    key: key,
-    verbose: false,
-    lat: 12.5,
-    lon: 104.5,
-    zoom: 6,
-    overlay: 'clouds',
-    level: 'surface',
-    timestamp: Math.round(Date.now()/1000)
-  };
+  var options={key:key,verbose:false,lat:12.5,lon:104.5,zoom:6,overlay:'clouds',level:'surface'};
 
-  // windyInit is provided by libBoot.js
-  if(typeof windyInit === 'undefined'){
-    // SDK not loaded yet — load it dynamically
-    var s=document.createElement('script');
-    s.src='https://api.windy.com/assets/map-forecast/libBoot.js';
-    s.onload=function(){ windyInit(options, onWindyReady); };
-    s.onerror=function(){
-      leafletDiv.style.display='block';
-      windyDiv.style.display='none';
-      if(btn) btn.textContent='☁ Windy failed';
-    };
-    document.head.appendChild(s);
-  } else {
-    try {
-      windyInit(options, onWindyReady);
-    } catch(e) {
-      console.error('windyInit error:', e);
-      fallbackToLeaflet();
-    }
+  function doInit(){
+    try{ windyInit(options, onWindyReady); }
+    catch(e){ console.error('windyInit:',e); fallbackToLeaflet(); }
   }
 
-  // Timeout: if Windy doesn't load in 8 sec, fallback
-  setTimeout(function(){
-    if(!windyActive){
-      console.warn('Windy timeout — falling back to Leaflet');
-      fallbackToLeaflet();
-    }
-  }, 8000);
-}
+  if(typeof windyInit!=='undefined'){
+    doInit();
+  } else {
+    var existing=document.getElementById('windy-sdk-script');
+    if(existing) existing.remove();
+    var s=document.createElement('script');
+    s.id='windy-sdk-script';
+    s.src='https://api.windy.com/assets/map-forecast/libBoot.js';
+    s.onload=function(){ setTimeout(doInit,300); };
+    s.onerror=function(){ fallbackToLeaflet(); };
+    document.head.appendChild(s);
+  }
 
-function fallbackToLeaflet(){
-  windyActive=false;
-  var windyDiv=n('windy'), leafletDiv=n('route-map');
-  if(windyDiv) windyDiv.style.display='none';
-  if(leafletDiv) leafletDiv.style.display='block';
-  if(!metarMap) initMap();
-  var btn=n('btn-clouds');
-  if(btn){btn.textContent='☁ Clouds OFF';btn.style.color='var(--text2)';}
-  var sel=n('windy-layer-select');
-  if(sel) sel.style.display='none';
-  // Show helpful message
-  var status=n('metar-status');
-  if(status) status.textContent='Windy requires HTTPS — use GitHub Pages or upload to a web server';
+  setTimeout(function(){ if(!windyActive) fallbackToLeaflet(); },12000);
 }
 
 function onWindyReady(api){
