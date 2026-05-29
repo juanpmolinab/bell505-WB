@@ -65,7 +65,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 .lime{color:#86efac} .out-limit{color:#ef4444!important}
 
 /* CALC GRID */
-.calc-grid{display:grid;grid-template-columns:1.2fr 132px 1.2fr;gap:8px;margin-bottom:10px}
+.calc-grid{display:grid;grid-template-columns:1.08fr 158px 1.08fr;gap:8px;margin-bottom:10px}
 
 /* DESKTOP 2-COLUMN LAYOUT: [pax+heli+fuel] | [chart+results] */
 @media(min-width:900px){
@@ -80,10 +80,11 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
   /* layout 2 columnas */
   .calc-desktop{ display:grid; grid-template-columns:1fr 460px; gap:12px; align-items:stretch }
   .calc-left{ display:flex; flex-direction:column; gap:8px }
-  .calc-right{ display:flex; flex-direction:column; gap:8px; height:100% }
+  .calc-right{ display:flex; flex-direction:column; gap:8px }
 
   /* pax */
-  .calc-grid{ gap:8px; margin-bottom:0; align-items:stretch }
+  .calc-grid{ gap:8px; margin-bottom:0; align-items:stretch; height:360px }
+  .pax-panel,.heli-center{ height:100% }
   .pax-panel{ padding:9px 12px; gap:0; display:flex; flex-direction:column; justify-content:space-between; height:100% }
   .pax-row{ gap:4px; padding-bottom:0; flex:1; display:flex; flex-direction:column; justify-content:center }
   .pax-row input[type="text"]{ font-size:13px; padding:4px 7px }
@@ -94,7 +95,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 
   /* fuel */
   .fuel-panel{ padding:9px 12px; gap:8px; margin-bottom:0;
-    grid-template-columns:1fr 1fr 40px 1fr; flex:1; align-content:center }
+    grid-template-columns:1fr 1fr 40px 1fr; height:128px; align-content:center; box-sizing:border-box }
   .fuel-section{ gap:4px }
   .fuel-section label{ font-size:10px }
   .fuel-section div{ font-size:12px; line-height:1.5 }
@@ -103,12 +104,12 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 
   /* chart derecha */
   .chart-panel-desktop{ background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius); padding:10px; flex:1; display:flex; flex-direction:column }
-  .chart-wrap-desktop{ position:relative; height:360px }
+    border-radius:var(--radius); padding:10px; box-sizing:border-box; height:360px }
+  .chart-wrap-desktop{ position:relative; height:340px }
 
   /* tablas resultados */
   .results-table{ background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius); padding:8px 10px; flex:1 }
+    border-radius:var(--radius); padding:8px 10px; height:128px; display:flex; flex-direction:column; justify-content:center; box-sizing:border-box }
   .results-table table{ width:100%; border-collapse:collapse; font-size:12px }
   .results-table th{ color:var(--muted); font-weight:600; text-align:center;
     padding:5px 6px; border-bottom:1px solid var(--border) }
