@@ -1866,6 +1866,103 @@ function geminiAPIcall(parts){
   tryModel(0);
 }
 
+// ── AIRPORT GEOLOCATION HELPERS ──────────────────────────────────────────────
+
+// Find nearest ICAO airport to a city name using aviationweather API
+function cityToICAO(cityName, callback){
+  if(!cityName) return callback(null);
+  // Try direct lookup first - maybe it IS an ICAO code
+  if(/^[A-Z]{4}$/.test(cityName.trim().toUpperCase())){
+    callback(cityName.trim().toUpperCase()); return;
+  }
+  // Search AWC airport database by name
+  var proxies=[
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url='
+  ];
+  var url='https://aviationweather.gov/api/data/airport?ids=&bbox=&format=json&site='+encodeURIComponent(cityName)+'&distance=50';
+  
+  function tryProxy(i){
+    if(i>=proxies.length){ callback(null); return; }
+    fetch(proxies[i]+encodeURIComponent(url))
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.contents) d=JSON.parse(d.contents);
+        var arr=Array.isArray(d)?d:[];
+        if(arr.length) callback(arr[0].icaoId||arr[0].stationIdentifier||null);
+        else tryProxy(i+1);
+      })
+      .catch(function(){ tryProxy(i+1); });
+  }
+  tryProxy(0);
+}
+
+// Find nearest airport to GPS coordinates
+function coordsToICAO(lat, lon, callback){
+  var delta=1.5;
+  var bbox=[lat-delta,lon-delta,lat+delta,lon+delta].join(',');
+  var url='https://aviationweather.gov/api/data/airport?ids=&bbox='+bbox+'&format=json';
+  var proxies=['https://corsproxy.io/?','https://api.allorigins.win/raw?url=',url];
+  
+  function tryProxy(i){
+    var fetchUrl = i<2 ? proxies[i]+encodeURIComponent(url) : url;
+    fetch(fetchUrl)
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d&&d.contents) d=JSON.parse(d.contents);
+        var arr=Array.isArray(d)?d:[];
+        if(!arr.length){ if(i<2) tryProxy(i+1); else callback(null); return; }
+        // Sort by distance to coordinates
+        arr.sort(function(a,b){
+          var da=Math.pow((a.lat-lat),2)+Math.pow((a.lon-lon),2);
+          var db=Math.pow((b.lat-lat),2)+Math.pow((b.lon-lon),2);
+          return da-db;
+        });
+        callback(arr[0].icaoId||arr[0].stationIdentifier||null, arr);
+      })
+      .catch(function(){ if(i<2) tryProxy(i+1); else callback(null); });
+  }
+  tryProxy(0);
+}
+
+// After scan: resolve from/to city names to ICAO and fill METAR fields
+function resolveScannedAirports(fromCity, toCity){
+  // Get device GPS position
+  if(!navigator.geolocation) return;
+  
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat=pos.coords.latitude, lon=pos.coords.longitude;
+    
+    // Find nearest airport to current device location → METAR departure
+    coordsToICAO(lat, lon, function(nearestICAO, allAirports){
+      if(nearestICAO){
+        var depEl=n('icao-dep'); if(depEl) depEl.value=nearestICAO;
+        var fromEl=n('i-from'); if(fromEl&&!fromEl.value){ fromEl.value=nearestICAO; save('from',nearestICAO); }
+        console.log('GPS nearest airport:', nearestICAO);
+      }
+      
+      // Resolve destination city → ICAO
+      if(toCity){
+        cityToICAO(toCity, function(toICAO){
+          if(toICAO){
+            var arrEl=n('icao-arr'); if(arrEl) arrEl.value=toICAO;
+            var toEl=n('i-to'); if(toEl){ toEl.value=toICAO; save('to',toICAO); }
+            console.log('To city resolved:', toCity, '→', toICAO);
+          }
+        });
+      }
+    });
+  }, function(err){
+    // GPS failed — try to resolve cities without GPS
+    if(fromCity) cityToICAO(fromCity, function(icao){
+      if(icao){ var el=n('icao-dep'); if(el) el.value=icao; }
+    });
+    if(toCity) cityToICAO(toCity, function(icao){
+      if(icao){ var el=n('icao-arr'); if(el) el.value=icao; }
+    });
+  }, {timeout:8000, maximumAge:60000});
+}
+
 function buildExtractionPrompt(){
   var today=new Date();
   var tomorrow=new Date(today); tomorrow.setDate(today.getDate()+1);
@@ -2060,8 +2157,24 @@ function applyAllScan(){
     if(!d.pilot_weight_lbs){
       // Don't clear pilot weight — pilot always flies, keep existing
     }
-    if(d.from)      { var fe=n('i-from');  if(fe){fe.value=String(d.from); save('from',String(d.from));} }
-    if(d.to)        { var te=n('i-to');    if(te){te.value=String(d.to);   save('to',String(d.to));} }
+    if(d.from){
+      var fv=String(d.from);
+      var fe=n('i-from'); if(fe){fe.value=fv; save('from',fv);}
+      // Find nearest airport for METAR
+      var fromIcao=findAirportForCity(fv);
+      if(fromIcao){
+        var depEl=n('icao-dep'); if(depEl) depEl.value=fromIcao;
+      }
+    }
+    if(d.to){
+      var tv=String(d.to);
+      var te=n('i-to'); if(te){te.value=tv; save('to',tv);}
+      // Find nearest airport for METAR
+      var toIcao=findAirportForCity(tv);
+      if(toIcao){
+        var arrEl=n('icao-arr'); if(arrEl) arrEl.value=toIcao;
+      }
+    }
     if(d.date){
       var mde=n('m-date');
       if(mde){
@@ -2084,6 +2197,11 @@ function applyAllScan(){
 
     recalc();
     updateFuelDisplay();
+
+    // Resolve from/to cities to ICAO codes and fill METAR fields
+    if(scanData.from||scanData.to){
+      resolveScannedAirports(scanData.from||'', scanData.to||'');
+    }
 
     var bar=n('cg-status')||n('cg-status-mobile');
     if(bar){var orig=bar.textContent;bar.textContent='✓ Scan applied!';setTimeout(function(){bar.textContent=orig;},2000);}
@@ -2115,6 +2233,8 @@ function _initApp(){
   loadOwmKey();
   loadGeminiKey();
   loadWindyKey();
+  // Auto-detect GPS location on load
+  autoDetectLocation();
   loadAnthropicKey();
   setScanBackend(load('scan-backend','anthropic'));
   // restore fuel unit toggle state
@@ -2145,11 +2265,56 @@ var cloudsOn=false, capturedMapImg='', metarData={};
 var drawMode=false, drawnPoints=[], drawnPolyline=null, drawnMarkers=[], tempLine=null;
 
 var airportCoords={
+  // Cambodia
   'VDPP':{lat:11.5466,lon:104.8440,name:'Phnom Penh'},
   'VDKH':{lat:13.1066,lon:103.1320,name:'Siem Reap'},
   'VDSK':{lat:10.5797,lon:103.6369,name:'Sihanoukville'},
-  'VTBS':{lat:13.6811,lon:100.7472,name:'Bangkok BKK'},
+  'VDSA':{lat:13.3660,lon:103.8120,name:'Siem Reap Angkor'},
+  'VDBT':{lat:13.0956,lon:103.2232,name:'Battambang'},
+  // Thailand
+  'VTBS':{lat:13.6811,lon:100.7472,name:'Bangkok Suvarnabhumi'},
   'VTBD':{lat:13.9126,lon:100.6070,name:'Bangkok DMK'},
+  'VTCC':{lat:18.7668,lon:98.9628,name:'Chiang Mai'},
+  'VTSP':{lat:8.1132,lon:98.3169,name:'Phuket'},
+  'VTSM':{lat:9.1318,lon:99.7451,name:'Samui'},
+  // Singapore & Malaysia
+  'WSSS':{lat:1.3644,lon:103.9915,name:'Singapore Changi'},
+  'WMKK':{lat:2.7456,lon:101.7099,name:'Kuala Lumpur'},
+  'WMKL':{lat:6.1897,lon:100.4028,name:'Langkawi'},
+  // UAE
+  'OMDB':{lat:25.2528,lon:55.3644,name:'Dubai'},
+  'OMAL':{lat:24.4430,lon:54.6511,name:'Abu Dhabi'},
+  'OMSJ':{lat:25.3286,lon:55.5172,name:'Sharjah'},
+  'OMFJ':{lat:25.1122,lon:56.3244,name:'Fujairah'},
+  'OMRK':{lat:25.6128,lon:55.9388,name:'Ras Al Khaimah'},
+  // Vietnam
+  'VVTS':{lat:10.8188,lon:106.6520,name:'Ho Chi Minh City'},
+  'VVNB':{lat:21.2212,lon:105.8072,name:'Hanoi'},
+  'VVDN':{lat:16.0439,lon:108.1993,name:'Da Nang'},
+  // Indonesia
+  'WIII':{lat:-6.1256,lon:106.6559,name:'Jakarta Soekarno-Hatta'},
+  'WADD':{lat:-8.7481,lon:115.1670,name:'Bali Ngurah Rai'},
+  // Philippines
+  'RPLL':{lat:14.5086,lon:121.0196,name:'Manila'},
+  'RPVP':{lat:10.3021,lon:123.9794,name:'Cebu'},
+  // Australia
+  'YSSY':{lat:-33.9461,lon:151.1772,name:'Sydney'},
+  'YMML':{lat:-37.6733,lon:144.8430,name:'Melbourne'},
+  // India
+  'VIDP':{lat:28.5565,lon:77.1001,name:'Delhi'},
+  'VABB':{lat:19.0896,lon:72.8656,name:'Mumbai'},
+  // UK
+  'EGLL':{lat:51.4775,lon:-0.4614,name:'London Heathrow'},
+  // USA
+  'KJFK':{lat:40.6413,lon:-73.7781,name:'New York JFK'},
+  'KLAX':{lat:33.9425,lon:-118.4081,name:'Los Angeles'},
+  'KMIA':{lat:25.7959,lon:-80.2870,name:'Miami'},
+  // Venezuela
+  'SVMI':{lat:10.6031,lon:-66.9913,name:'Caracas Maiquetia'},
+  'SVBS':{lat:10.2500,lon:-67.6494,name:'Maracay'},
+  // Laos
+  'VLVT':{lat:17.9883,lon:102.5633,name:'Vientiane'},
+  'VLPS':{lat:15.1322,lon:105.7814,name:'Pakse'},
   'VVTS':{lat:10.8188,lon:106.6520,name:'Ho Chi Minh'},
   'VVNB':{lat:21.2212,lon:105.8072,name:'Hanoi'},
   'WSSS':{lat:1.3644, lon:103.9915,name:'Singapore'},
@@ -2166,6 +2331,36 @@ function initMap(){
   }).addTo(metarMap);
   cloudsLayer=null;
   cloudsOn=false;
+}
+
+// Auto-detect location silently on app load
+function autoDetectLocation(){
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat=pos.coords.latitude, lon=pos.coords.longitude;
+    // Save current location
+    save('current-lat', lat);
+    save('current-lon', lon);
+    // Find nearest airport to current position
+    var nearestIcao=findNearestAirport(lat, lon);
+    if(nearestIcao){
+      save('nearest-airport', nearestIcao);
+      // Auto-fill departure if empty
+      var fromEl=n('i-from');
+      if(fromEl && !fromEl.value.trim()){
+        fromEl.value=airportCoords[nearestIcao].name||nearestIcao;
+        save('from', fromEl.value);
+      }
+      // Pre-fill METAR departure if empty
+      var depEl=n('icao-dep');
+      if(depEl && !depEl.value.trim()){
+        depEl.value=nearestIcao;
+      }
+    }
+    console.log('Location detected:', lat.toFixed(4), lon.toFixed(4), '→', nearestIcao);
+  }, function(err){
+    console.log('GPS not available:', err.message);
+  }, {timeout:10000, maximumAge:60000, enableHighAccuracy:false});
 }
 
 function locateMe(){
@@ -2753,6 +2948,42 @@ function tryFetch(icao,apiKey,workerUrl,onOk,onErr){
 }
 
 // Parse raw METAR string into normalized object
+// Find nearest airport ICAO to given lat/lon
+function findNearestAirport(lat, lon){
+  var best=null, bestDist=999999;
+  Object.keys(airportCoords).forEach(function(icao){
+    var a=airportCoords[icao];
+    var dlat=a.lat-lat, dlon=a.lon-lon;
+    var dist=Math.sqrt(dlat*dlat+dlon*dlon);
+    if(dist<bestDist){ bestDist=dist; best=icao; }
+  });
+  return best;
+}
+
+// Find nearest airport to a city name (fuzzy match then geo lookup)
+function findAirportForCity(cityName){
+  if(!cityName) return null;
+  var city=cityName.toLowerCase().trim();
+  // Direct name match
+  var keys=Object.keys(airportCoords);
+  for(var i=0;i<keys.length;i++){
+    var a=airportCoords[keys[i]];
+    if(a.name && a.name.toLowerCase().indexOf(city)>=0) return keys[i];
+    if(city.indexOf(keys[i].toLowerCase())>=0) return keys[i];
+  }
+  // Partial city name match
+  for(var i=0;i<keys.length;i++){
+    var a=airportCoords[keys[i]];
+    var aname=(a.name||'').toLowerCase();
+    // Check if any word in city matches airport name
+    var words=city.split(/[\s,\-]+/);
+    for(var w=0;w<words.length;w++){
+      if(words[w].length>3 && aname.indexOf(words[w])>=0) return keys[i];
+    }
+  }
+  return null;
+}
+
 function parseRawMETAR(raw,icao){
   var t={icaoId:icao,rawOb:raw,rawTaf:'',clouds:[],wxString:'',flightCategory:''};
   // Wind: dddssKT or dddssGggKT
