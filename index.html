@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="B505 W&amp;B">
 <meta name="theme-color" content="#0a0e1a">
-<title>Bell 505 · Weight & Balance</title>
+<title>HeliOps · W&amp;B</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/chart.js" onerror="console.warn('Chart.js CDN failed')"></script>
@@ -239,7 +239,7 @@ label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:
 <div class="top-bar">
   <h1>
     <img id="logo-kaek" alt="KAEK">
-    Bell 505 · W&B
+    HeliOps · W&B
   </h1>
   <div style="flex:1"></div>
   <button class="nav-btn active-tab" onclick="showPage('calc',this)">Calculator</button>
@@ -1867,25 +1867,24 @@ function geminiAPIcall(parts){
 }
 
 function buildExtractionPrompt(){
-  return 'You are extracting data from a flight manifest or passenger list. ' +
-    'The image may be a photo, screenshot, or scanned document - analyze it carefully. ' +
-    'Look for: passenger names, weights, pilot/captain name, departure, destination, date, registration. ' +
-    'CRITICAL: Your response must be ONLY a JSON object. Start with { and end with }. ' +
-    'No markdown, no explanation, no text before or after the JSON. ' +
-    'JSON fields (include only what you can read): ' +
-    'pilot_name (string), ' +
-    'date (string), ' +
-    'from (string - departure city or airport), ' +
-    'to (string - destination city or airport), ' +
-    'registration (string - aircraft tail number), ' +
-    'alt (number, feet), temp (number, celsius), qnh (number, hPa), nm (number), ' +
-    'pax: array of passengers (NOT pilot) [{name: string, weight_lbs: number}], max 4 entries, ' +
-    'cargo_lbs (number, only if explicitly shown as cargo). ' +
-    'Convert kg to lbs by multiplying by 2.205. ' +
-    'If you cannot read the image clearly, extract whatever you can see. ' +
-    'Even if partial, return what you found as JSON. ' +
-    'EXAMPLE OUTPUT: {"pilot_name":"Juan Molina","from":"Hangar","to":"Oudon Temple",' +
-    '"pax":[{"name":"Dara LY","weight_lbs":132},{"name":"Porngpisey CHOEM","weight_lbs":176}]}';
+  var today=new Date();
+  var tomorrow=new Date(today); tomorrow.setDate(today.getDate()+1);
+  function fmt(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+  var todayStr=fmt(today), tomorrowStr=fmt(tomorrow);
+
+  return 'Extract flight data from this image (manifest, chat message, or document). '+
+    'TODAY='+todayStr+' TOMORROW='+tomorrowStr+'. '+
+    'Convert ALL relative dates ("tomorrow","mañana","manana","next Monday") to YYYY-MM-DD using these dates. '+
+    'RESPOND ONLY WITH JSON. Start with { end with }. No markdown no explanation. '+
+    'Fields to extract: '+
+    'pilot_name, date (YYYY-MM-DD), from, to, registration, '+
+    'alt (ft), temp (C), qnh (hPa), nm, '+
+    'pax:[{name,weight_lbs}] max 4 passengers NOT pilot, '+
+    'cargo_lbs. '+
+    'Convert kg to lbs (x2.205). '+
+    'Example for message on '+todayStr+' saying "tomorrow, Ahmed 95kg, Sarah 68kg, Khalid 88kg, Dubai to Abu Dhabi": '+
+    '{"date":"'+tomorrowStr+'","from":"Dubai","to":"Abu Dhabi",'+
+    '"pax":[{"name":"Ahmed Al Mansoori","weight_lbs":209},{"name":"Sarah Mitchell","weight_lbs":150},{"name":"Khalid Al Rashidi","weight_lbs":194}]}';
 }
 
 function callClaudeVision(base64, mediaType){
